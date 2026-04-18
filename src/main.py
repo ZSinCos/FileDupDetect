@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):
         right_panel = self.create_right_panel()
         splitter.addWidget(right_panel)
 
-        splitter.setSizes([700, 500])
+        splitter.setSizes([500, 700])
 
         main_layout.addWidget(splitter)
 
