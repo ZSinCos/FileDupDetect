@@ -161,38 +161,51 @@ class MainWindow(QMainWindow):
         self.file_table.horizontalHeader().setStretchLastSection(True)
         self.file_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.file_table.itemClicked.connect(self.on_file_selected)
-        self.file_table.setMaximumHeight(180)
+        self.file_table.setMaximumHeight(150)
 
         layout.addWidget(self.file_table)
 
         detail_label = QLabel("歌曲详情")
         layout.addWidget(detail_label)
 
-        detail_scroll = QScrollArea()
-        detail_scroll.setWidgetResizable(True)
-        detail_scroll.setMinimumHeight(200)
+        info_layout = QHBoxLayout()
 
-        detail_widget = QWidget()
-        self.detail_layout = QVBoxLayout(detail_widget)
+        cover_widget = QWidget()
+        cover_layout = QVBoxLayout(cover_widget)
+        cover_layout.setContentsMargins(0, 0, 0, 0)
 
         self.cover_label = QLabel("封面")
         self.cover_label.setAlignment(Qt.AlignCenter)
-        self.cover_label.setMinimumSize(200, 200)
-        self.cover_label.setMaximumSize(200, 200)
-        self.detail_layout.addWidget(self.cover_label)
+        self.cover_label.setMinimumSize(120, 120)
+        self.cover_label.setMaximumSize(120, 120)
+        cover_layout.addWidget(self.cover_label)
+        cover_layout.addStretch()
+
+        info_widget = QWidget()
+        info_vlayout = QVBoxLayout(info_widget)
+        info_vlayout.setContentsMargins(0, 0, 0, 0)
 
         self.info_label = QLabel()
-        self.detail_layout.addWidget(self.info_label)
+        self.info_label.setWordWrap(True)
+        info_vlayout.addWidget(self.info_label)
+        info_vlayout.addStretch()
+
+        info_layout.addWidget(cover_widget)
+        info_layout.addWidget(info_widget)
+        layout.addLayout(info_layout)
 
         self.lyrics_label = QLabel("歌词")
-        self.detail_layout.addWidget(self.lyrics_label)
+        layout.addWidget(self.lyrics_label)
+
+        self.lyrics_scroll = QScrollArea()
+        self.lyrics_scroll.setWidgetResizable(True)
+        self.lyrics_scroll.setMinimumHeight(150)
 
         self.lyrics_text = QLabel()
-        self.lyrics_text.setWordWrap(True)
-        self.detail_layout.addWidget(self.lyrics_text)
+        self.lyrics_text.setWordWrap(False)
+        self.lyrics_scroll.setWidget(self.lyrics_text)
 
-        detail_scroll.setWidget(detail_widget)
-        layout.addWidget(detail_scroll)
+        layout.addWidget(self.lyrics_scroll)
 
         group.setLayout(layout)
         return group
@@ -339,21 +352,27 @@ class MainWindow(QMainWindow):
         if audio.album_cover:
             pixmap = QPixmap()
             pixmap.loadFromData(audio.album_cover)
-            scaled = pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             self.cover_label.setPixmap(scaled)
         else:
             self.cover_label.setText("无封面")
 
-        info_text = f"标题: {audio.title or '未知'}\n艺术家: {audio.artist or '未知'}\n专辑: {audio.album or '未知'}\n时长: {self.format_duration(audio.duration)}\n比特率: {self.format_bitrate(audio.bitrate)}"
+        info_text = (
+            f"<b>标题:</b> {audio.title or '未知'}<br>"
+            f"<b>艺术家:</b> {audio.artist or '未知'}<br>"
+            f"<b>专辑:</b> {audio.album or '未知'}<br>"
+            f"<b>时长:</b> {self.format_duration(audio.duration)}<br>"
+            f"<b>比特率:</b> {self.format_bitrate(audio.bitrate)}"
+        )
         self.info_label.setText(info_text)
 
         if audio.lyrics:
             self.lyrics_text.setText(audio.lyrics)
             self.lyrics_label.setVisible(True)
-            self.lyrics_text.setVisible(True)
+            self.lyrics_scroll.setVisible(True)
         else:
             self.lyrics_label.setVisible(False)
-            self.lyrics_text.setVisible(False)
+            self.lyrics_scroll.setVisible(False)
 
     def on_file_selected(self, item: QTableWidgetItem):
         audio: AudioMetadata = item.data(Qt.UserRole)
