@@ -22,6 +22,8 @@ class AudioMetadata:
     file_size: int = 0
     file_hash: Optional[str] = None
     fingerprint: Optional[str] = None
+    album_cover: Optional[bytes] = None
+    lyrics: Optional[str] = None
 
 
 class AudioScanner:
@@ -66,9 +68,12 @@ class AudioScanner:
                     metadata.sample_rate = getattr(audio.info, 'sample_rate', None)
 
                 tags = audio.tags or {}
-                metadata.title = self._get_tag(tags, ['TIT2', 'title', '\xa9nam'])
-                metadata.artist = self._get_tag(tags, ['TPE1', 'artist', '\xa9ART'])
-                metadata.album = self._get_tag(tags, ['TALB', 'album', '\xa9alb'])
+                metadata.title = self._get_tag(audio, ['TIT2', 'title', '\xa9nam']) or audio.get('title') or None
+                metadata.artist = self._get_tag(audio, ['TPE1', 'artist', '\xa9ART']) or audio.get('artist') or None
+                metadata.album = self._get_tag(audio, ['TALB', 'album', '\xa9alb']) or audio.get('album') or None
+
+                metadata.album_cover = self._get_album_cover(audio)
+                metadata.lyrics = self._get_lyrics(audio)
 
             return metadata
 
@@ -76,21 +81,52 @@ class AudioScanner:
             print(f"Error extracting metadata from {file_path}: {e}")
             return None
 
-    def _get_tag(self, tags, keys):
+    def _get_tag(self, audio, keys):
         for key in keys:
-            if tags is not None:
-                try:
-                    if isinstance(tags, dict):
-                        value = tags.get(key)
-                    else:
-                        value = getattr(tags, key, None)
+            try:
+                value = audio.get(key)
+                if value:
+                    if hasattr(value, 'text'):
+                        return value.text[0] if value.text else None
+                    elif isinstance(value, list):
+                        return str(value[0])
+                    return str(value)
+            except:
+                pass
+        return None
 
+    def _get_album_cover(self, audio) -> Optional[bytes]:
+        try:
+            for key in ['APIC:', 'cover', 'Covr']:
+                try:
+                    value = audio.get(key)
                     if value:
-                        if isinstance(value, list):
-                            return str(value[0])
-                        return str(value)
+                        if hasattr(value, 'data'):
+                            return value.data
+                        elif isinstance(value, list) and len(value) > 0:
+                            if hasattr(value[0], 'data'):
+                                return value[0].data
+                        elif isinstance(value, bytes):
+                            return value
                 except:
                     pass
+        except:
+            pass
+        return None
+
+    def _get_lyrics(self, audio) -> Optional[str]:
+        for key in ['USLT::eng', 'USLT', 'lyrics', '\xa9lyr']:
+            try:
+                value = audio.get(key)
+                if value:
+                    if hasattr(value, 'text'):
+                        return str(value.text)
+                    elif isinstance(value, list):
+                        return str(value[0])
+                    elif isinstance(value, str):
+                        return value
+            except:
+                pass
         return None
 
     def calculate_hash(self, file_path: str, algorithm: str = 'md5') -> Optional[str]:
