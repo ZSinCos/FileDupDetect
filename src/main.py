@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QListWidget, QListWidgetItem, QScrollArea, QSplitter,
                                QTableWidget, QTableWidgetItem, QHeaderView, QFrame)
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
-from PySide6.QtGui import QIcon, QAction, QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QIcon, QAction, QDragEnterEvent, QDropEvent, QPixmap
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):
         right_panel = self.create_right_panel()
         splitter.addWidget(right_panel)
 
-        splitter.setSizes([500, 700])
+        splitter.setSizes([350, 750])
 
         main_layout.addWidget(splitter)
 
@@ -125,8 +125,21 @@ class MainWindow(QMainWindow):
         return toolbar
 
     def create_left_panel(self):
-        group = QGroupBox("重复组")
+        group = QGroupBox()
         layout = QVBoxLayout()
+
+        all_files_label = QLabel("所有文件")
+        layout.addWidget(all_files_label)
+
+        self.all_files_list = QListWidget()
+        self.all_files_list.setMaximumHeight(150)
+        self.all_files_list.itemClicked.connect(self.on_all_file_clicked)
+        layout.addWidget(self.all_files_list)
+
+        layout.addWidget(QFrame())
+
+        dup_label = QLabel("重复组")
+        layout.addWidget(dup_label)
 
         self.duplicate_list = QListWidget()
         self.duplicate_list.itemClicked.connect(self.on_group_clicked)
@@ -136,8 +149,11 @@ class MainWindow(QMainWindow):
         return group
 
     def create_right_panel(self):
-        group = QGroupBox("文件详情")
+        group = QGroupBox()
         layout = QVBoxLayout()
+
+        files_label = QLabel("文件详情")
+        layout.addWidget(files_label)
 
         self.file_table = QTableWidget()
         self.file_table.setColumnCount(6)
@@ -145,8 +161,38 @@ class MainWindow(QMainWindow):
         self.file_table.horizontalHeader().setStretchLastSection(True)
         self.file_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.file_table.itemClicked.connect(self.on_file_selected)
+        self.file_table.setMaximumHeight(180)
 
         layout.addWidget(self.file_table)
+
+        detail_label = QLabel("歌曲详情")
+        layout.addWidget(detail_label)
+
+        detail_scroll = QScrollArea()
+        detail_scroll.setWidgetResizable(True)
+        detail_scroll.setMinimumHeight(200)
+
+        detail_widget = QWidget()
+        self.detail_layout = QVBoxLayout(detail_widget)
+
+        self.cover_label = QLabel("封面")
+        self.cover_label.setAlignment(Qt.AlignCenter)
+        self.cover_label.setMinimumSize(200, 200)
+        self.cover_label.setMaximumSize(200, 200)
+        self.detail_layout.addWidget(self.cover_label)
+
+        self.info_label = QLabel()
+        self.detail_layout.addWidget(self.info_label)
+
+        self.lyrics_label = QLabel("歌词")
+        self.detail_layout.addWidget(self.lyrics_label)
+
+        self.lyrics_text = QLabel()
+        self.lyrics_text.setWordWrap(True)
+        self.detail_layout.addWidget(self.lyrics_text)
+
+        detail_scroll.setWidget(detail_widget)
+        layout.addWidget(detail_scroll)
 
         group.setLayout(layout)
         return group
@@ -221,6 +267,8 @@ class MainWindow(QMainWindow):
 
         self.lbl_status.setText(f"已扫描 {len(audio_files)} 个文件，正在查找重复...")
 
+        self.display_all_files()
+
         finder = DuplicateFinder()
         self.duplicate_groups = finder.find_duplicates(audio_files)
 
@@ -233,6 +281,18 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         self.lbl_status.setText("扫描出错")
         QMessageBox.warning(self, "错误", f"扫描出错: {error}")
+
+    def display_all_files(self):
+        self.all_files_list.clear()
+        for audio in self.audio_files:
+            item = QListWidgetItem(audio.file_name)
+            item.setData(Qt.UserRole, audio)
+            self.all_files_list.addItem(item)
+
+    def on_all_file_clicked(self, list_item: QListWidgetItem):
+        audio: AudioMetadata = list_item.data(Qt.UserRole)
+        if audio:
+            self.display_song_details(audio)
 
     def display_duplicate_groups(self):
         self.duplicate_list.clear()
@@ -275,8 +335,30 @@ class MainWindow(QMainWindow):
 
             self.file_table.item(i, 1).setData(Qt.UserRole, audio)
 
+    def display_song_details(self, audio: AudioMetadata):
+        if audio.album_cover:
+            pixmap = QPixmap()
+            pixmap.loadFromData(audio.album_cover)
+            scaled = pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.cover_label.setPixmap(scaled)
+        else:
+            self.cover_label.setText("无封面")
+
+        info_text = f"标题: {audio.title or '未知'}\n艺术家: {audio.artist or '未知'}\n专辑: {audio.album or '未知'}\n时长: {self.format_duration(audio.duration)}\n比特率: {self.format_bitrate(audio.bitrate)}"
+        self.info_label.setText(info_text)
+
+        if audio.lyrics:
+            self.lyrics_text.setText(audio.lyrics)
+            self.lyrics_label.setVisible(True)
+            self.lyrics_text.setVisible(True)
+        else:
+            self.lyrics_label.setVisible(False)
+            self.lyrics_text.setVisible(False)
+
     def on_file_selected(self, item: QTableWidgetItem):
-        pass
+        audio: AudioMetadata = item.data(Qt.UserRole)
+        if audio:
+            self.display_song_details(audio)
 
     def select_all_keepers(self):
         for row in range(self.file_table.rowCount()):
